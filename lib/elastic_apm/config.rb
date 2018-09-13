@@ -42,6 +42,9 @@ module ElasticAPM
       span_frames_min_duration: 5,
 
       disabled_spies: %w[json],
+      instrumented_rake_tasks: [],
+
+      default_tags: {},
 
       current_user_id_method: :id,
       current_user_email_method: :email,
@@ -95,7 +98,11 @@ module ElasticAPM
       'ELASTIC_APM_TRANSACTION_MAX_SPANS' => [:int, 'transaction_max_spans'],
 
       'ELASTIC_APM_DISABLE_SEND' => [:bool, 'disable_send'],
-      'ELASTIC_APM_DISABLED_SPIES' => [:list, 'disabled_spies']
+      'ELASTIC_APM_DISABLED_SPIES' => [:list, 'disabled_spies'],
+      'ELASTIC_APM_INSTRUMENTED_RAKE_TASKS' =>
+        [:list, 'instrumented_rake_tasks'],
+
+      'ELASTIC_APM_DEFAULT_TAGS' => [:dict, 'default_tags']
     }.freeze
 
     def initialize(options = {})
@@ -153,6 +160,7 @@ module ElasticAPM
     attr_accessor :span_frames_min_duration
 
     attr_accessor :disabled_spies
+    attr_accessor :instrumented_rake_tasks
 
     attr_accessor :view_paths
     attr_accessor :root_path
@@ -162,12 +170,14 @@ module ElasticAPM
     attr_accessor :current_user_email_method
     attr_accessor :current_user_username_method
 
+    attr_accessor :default_tags
+
     attr_reader   :custom_key_filters
     attr_reader   :ignore_url_patterns
 
     alias :disable_environment_warning? :disable_environment_warning
-    alias :verify_server_cert? :verify_server_cert
     alias :disable_send? :disable_send
+    alias :verify_server_cert? :verify_server_cert
 
     def app=(app)
       case app_type?(app)
@@ -182,7 +192,7 @@ module ElasticAPM
     end
 
     def app_type?(app)
-      if defined?(::Rails) && app.is_a?(Rails::Application)
+      if defined?(Rails::Application) && app.is_a?(Rails::Application)
         return :rails
       end
 
@@ -219,6 +229,7 @@ module ElasticAPM
         sidekiq
         sinatra
         tilt
+        rake
       ]
     end
     # rubocop:enable Metrics/MethodLength
@@ -252,6 +263,7 @@ module ElasticAPM
           when :float then value.to_f
           when :bool then !%w[0 false].include?(value.strip.downcase)
           when :list then value.split(/[ ,]/)
+          when :dict then Hash[value.split('&').map { |kv| kv.split('=') }]
           else value
           end
 
